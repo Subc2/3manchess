@@ -3,6 +3,7 @@ package player
 //© Copyright 2015-2016 Michał Krzysztof Feiler & Paweł Zacharek
 
 import "github.com/ArchieT/3manchess/game"
+import "sync"
 import "log" //debug
 
 //Player is either AI or a human via some UI
@@ -10,8 +11,8 @@ type Player interface {
 	Initialize(*Gameplay)
 	ErrorChannel() chan<- error
 	HurryChannel() chan<- bool
-	HeyItsYourMove(*game.State, <-chan bool) *game.Move //that channel is for signalling to hurry up
-	HeySituationChanges(*game.Move, *game.State)
+	HeyItsYourMove(*game.State, <-chan bool) game.Move //that channel is for signalling to hurry up
+	HeySituationChanges(game.Move, *game.State)
 	HeyYouLost(*game.State)
 	HeyYouWon(*game.State)
 	HeyYouDrew(*game.State)
@@ -41,7 +42,7 @@ func (gp *Gameplay) HurryUpWhoever() {
 }
 
 type SituationChange struct {
-	*game.Move
+	game.Move
 	After *game.State
 }
 
@@ -89,20 +90,31 @@ func (gp *Gameplay) Lifes() (end bool) {
 }
 
 func (gp *Gameplay) Turn() (breaking bool) {
+	log.Println("TURNFUNC START")
 	gp.Players[gp.State.MovesNext].HeyWeWaitingForYou(true)
 	hurry := make(chan bool)
+	log.Println("TURNFUNC ASKING", gp.Players, gp.State.MovesNext)
 	move := gp.Players[gp.State.MovesNext].HeyItsYourMove(gp.State, hurry)
+	log.Println("TURNFUNC AFTERING", move)
 	after, err := move.After()
+	log.Println("TURNFUNC AFTERED", after, err)
 	if err != nil {
 		gp.Players[gp.State.MovesNext].ErrorChannel() <- err
 		log.Println(err)
 		return gp.Turn()
 	}
+	log.Println("TURNFUNC is gonna EVALDEATH")
 	after.EvalDeath()
+	log.Println("TURNFUNC EVALDEATHED")
 	gp.State = after
+	var wg sync.WaitGroup
 	for _, ci := range game.COLORS {
+		wg.Add(1)
+		log.Println("NOTIFYING", ci, "ABOUT", move, after)
 		gp.Players[ci].HeySituationChanges(move, after)
+		wg.Done()
 	}
+	wg.Wait()
 	return gp.GiveResult()
 }
 

@@ -12,7 +12,7 @@ import "fmt"
 import "github.com/ArchieT/3manchess/ai"
 import "encoding/json"
 
-const DEFFIXDEPTH uint8 = 1
+const DEFFIXDEPTH uint8 = 0
 
 const DEFOWN2THRTHD = 4.0
 
@@ -29,6 +29,15 @@ type AIPlayer struct {
 
 func (a *AIPlayer) Config() ai.Config {
 	return a.Conf
+}
+
+func (a *AIPlayer) SetConf(b []byte) error {
+	ac := new(AIConfig)
+	e := json.Unmarshal(b, ac)
+	if e == nil {
+		a.Conf = *ac
+	}
+	return e
 }
 
 type AIConfig struct {
@@ -157,10 +166,10 @@ func (a *AIPlayer) HeyItsYourMove(s *game.State, hurryup <-chan bool) game.Move 
 	return a.Think(s, hurryup)
 }
 
-func (a *AIPlayer) HeySituationChanges(_ *game.Move, _ *game.State) {}
-func (a *AIPlayer) HeyYouLost(_ *game.State)                        {}
-func (a *AIPlayer) HeyYouWon(_ *game.State)                         {}
-func (a *AIPlayer) HeyYouDrew(_ *game.State)                        {}
+func (a *AIPlayer) HeySituationChanges(_ game.Move, _ *game.State) {}
+func (a *AIPlayer) HeyYouLost(_ *game.State)                       {}
+func (a *AIPlayer) HeyYouWon(_ *game.State)                        {}
+func (a *AIPlayer) HeyYouDrew(_ *game.State)                       {}
 
 func (a *AIPlayer) String() string {
 	return fmt.Sprintf("%v%v", "SVBotDepth", a.Conf.Depth) //TODO: print whoami and conf
