@@ -4,6 +4,36 @@ package game
 
 import "testing"
 
+var plat129 []FromTo = []FromTo{
+	{Pos{1, 0}, Pos{2, 0}},
+	{Pos{1, 8}, Pos{2, 8}},
+	{Pos{1, 16}, Pos{2, 16}},
+	{Pos{2, 0}, Pos{3, 0}},
+	{Pos{2, 8}, Pos{3, 8}},
+	{Pos{2, 16}, Pos{3, 16}},
+	{Pos{0, 0}, Pos{2, 0}},
+	{Pos{0, 8}, Pos{2, 8}},
+	{Pos{0, 22}, Pos{2, 23}},
+	{Pos{2, 0}, Pos{2, 8}},
+	{Pos{0, 9}, Pos{2, 10}},
+	{Pos{0, 16}, Pos{2, 16}},
+	{Pos{2, 8}, Pos{2, 15}},
+/*	{Pos{0, 14}, Pos{2, 13}},
+	{Pos{2, 16}, Pos{2, 15}},
+	{Pos{0, 1}, Pos{2, 0}},
+	{Pos{0, 11}, Pos{0, 8}},
+	{Pos{2, 15}, Pos{2, 7}},
+	{Pos{0, 6}, Pos{2, 5}},
+	{Pos{2, 10}, Pos{1, 8}},
+	{Pos{2, 7}, Pos{3, 7}},
+	{Pos{2, 0}, Pos{3, 2}},
+	{Pos{1, 8}, Pos{3, 7}},
+	{Pos{2, 23}, Pos{1, 1}},
+	{Pos{2, 5}, Pos{3, 7}},
+	{Pos{0, 8}, Pos{2, 8}},
+	{Pos{1, 1}, Pos{2, 3}},*/
+}
+
 func TestSimpleGenNoPanic(t *testing.T) {
 	newState := NewState()
 	first := Move{Pos{1, 0}, Pos{3, 0}, &newState, 0}
@@ -67,5 +97,65 @@ func TestAfter_pawnCrossCenter(t *testing.T) {
 		if err != nil {
 			t.Error("Unexpected error (3rd loop, i =", i, "): ", err)
 		}
+	}
+}
+
+func TestEvalAfter_plat129(t *testing.T) {
+	newState := NewState()
+	var s *State
+	s = &newState
+	var err error
+	var mov Move
+	for _, ft := range plat129 {
+		if s == nil {
+			t.Error("Move considered invalid:", mov)
+		}
+		mov = ft.Move(s)
+		s, err = mov.EvalAfter()
+		if err == nil {
+			t.Log(ft, mov, s)
+		}
+	}
+	if err == nil {
+		t.Error("Invalid move accepted. State afterwards:", s)
+	}
+}
+
+func TestAfter_pawnCapture(t *testing.T) {
+	newState := NewState()
+	var s *State
+	s = &newState
+	var mov Move
+	var ft FromTo
+	var err error
+	for i := 0; i < 10; i++ {
+		ft = plat129[i]
+		mov = ft.Move(s)
+		s, err = mov.EvalAfter()
+		if err != nil {
+			t.Error(err, s, mov, ft)
+		}
+		t.Log(ft, mov, s)
+	}
+	s.Board[2][10].NotEmpty = true
+	s.Board[2][10].Fig.FigType = Pawn
+	s.Board[2][10].Fig.Color = White
+	s.Board[2][10].Fig.PawnCenter = true
+	t.Log(s)
+	ft = FromTo{Pos{1, 9}, Pos{2, 10}}
+	mov = ft.Move(s)
+	if s, err = mov.After(); err != nil {
+		t.Error(err, s, mov, ft)
+	}
+	t.Log(ft, mov, s)
+	s.Board[2][18].NotEmpty = true
+	s.Board[2][18].Fig.FigType = Pawn
+	s.Board[2][18].Fig.Color = White
+	s.Board[2][18].Fig.PawnCenter = true
+	t.Log(s)
+	ft = FromTo{Pos{1, 19}, Pos{2, 18}}
+	mov = ft.Move(s)
+	if s, err = mov.After(); err != nil {
+		t.Error(err, s, mov, ft)
 	}
 }

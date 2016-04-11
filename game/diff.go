@@ -4,21 +4,18 @@ package game
 
 //BoardDiff describes a single difference between boards
 type BoardDiff struct {
-	Fig
-	Bef Fig
-	Pos
+	Fig `json:"afterfig"`
+	Bef Fig `json:"beforefig"`
+	Pos `json:"where"`
 }
 
 //Diff returns differences between Boards
 func (b *Board) Diff(o *Board) []BoardDiff {
 	d := make([]BoardDiff, 0, 5)
-	var oac ACP
 	var p, a *Square
-	var oa Pos
 	var c *BoardDiff
-	for oac.OK() {
-		oa = Pos(oac)
-		if p, a = b.GPos(oa), o.GPos(oa); a != p {
+	for _, oa := range ALLPOS {
+		if p, a = b.GPos(oa), o.GPos(oa); *a != *p {
 			c = new(BoardDiff)
 			c.Pos = oa
 			if a.Empty() {
@@ -33,7 +30,6 @@ func (b *Board) Diff(o *Board) []BoardDiff {
 			}
 			d = append(d, *c)
 		}
-		oac.P()
 	}
 	return d
 }

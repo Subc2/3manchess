@@ -237,7 +237,7 @@ func (s *State) String() string {
 
 //AnyPiece : if a piece could move (any piece, whatever stays there)
 func (s *State) AnyPiece(from, to Pos) bool {
-	return s.Board.AnyPiece(from, to, s.MoatsState, s.Castling, s.EnPassant)
+	return s.Board.AnyPiece(from, to, s.MoatsState, s.Castling, s.EnPassant, s.PlayersAlive)
 }
 
 //DEFENPASSANT : empty enpassant   const
@@ -262,6 +262,7 @@ var NEWGAME State
 
 func init() { //initialize module pseudoconstants
 	allposinit()
+	allfromtoinit()
 	boardinit()
 	NEWGAME = State{&BOARDFORNEWGAME, DEFMOATSSTATE, White, DEFCASTLING, DEFENPASSANT, HalfmoveClock(0), FullmoveNumber(1), DEFPLAYERSALIVE}
 }

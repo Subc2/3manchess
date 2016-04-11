@@ -148,13 +148,10 @@ func (e IllegalMoveError) Error() string {
 
 //WhereIsKing : where is king of specified color on the board?
 func (b *Board) WhereIsKing(who Color) *Pos {
-	var oac ACP
-	for oac.OK() {
-		opos := Pos(oac)
+	for _, opos := range ALLPOS {
 		if sq := b.GPos(opos); sq.NotEmpty && sq.Fig.Color == who && sq.Fig.FigType == King {
 			return &opos
 		}
-		oac.P()
 	}
 	return nil
 }
@@ -178,37 +175,29 @@ func (b *Board) CheckChecking(who Color, pa PlayersAlive) Check { //true if in c
 
 //ThreatChecking checks if the piece on where Pos is 'in check'
 func (b *Board) ThreatChecking(where Pos, pa PlayersAlive, ep EnPassant) Check {
-	var opos Pos
 	who := b.GPos(where).Color()
 	var heyitscheck Check
-	var oac ACP
-	for oac.OK() {
-		opos = Pos(oac)
+	for _, opos := range ALLPOS {
 		if tjf := b.GPos(opos); tjf.NotEmpty && tjf.Color() != who && pa.Give(tjf.Color()) &&
-			b.AnyPiece(opos, where, DEFMOATSSTATE, FALSECASTLING, ep) {
+			b.AnyPiece(opos, where, DEFMOATSSTATE, FALSECASTLING, ep, pa) {
 			return Check{If: true, From: opos}
 		}
-		oac.P()
 	}
 	return heyitscheck
 }
 
 //FriendsNAllies returns positions of our pieces and their pieces
 func (b *Board) FriendsNAllies(who Color, pa PlayersAlive) ([]Pos, <-chan Pos) {
-	var opos Pos
-	var oac ACP
 	my := make([]Pos, 0, 16)
 	oni := make(chan Pos, 32)
 	if pa.Give(who) {
-		for oac.OK() {
-			opos = Pos(oac)
+		for _, opos := range ALLPOS {
 			tjf := b.GPos(opos)
 			if tjf.Color() == who {
 				my = append(my, opos)
 			} else if tjf.NotEmpty && pa.Give(tjf.Color()) {
 				oni <- opos
 			}
-			oac.P()
 		}
 	}
 	close(oni)
@@ -221,7 +210,7 @@ func (b *Board) WeAreThreateningTypes(who Color, pa PlayersAlive, ep EnPassant) 
 	my, oni := b.FriendsNAllies(who, pa)
 	for ich := range oni {
 		for _, nasz := range my {
-			if b.AnyPiece(nasz, ich, DEFMOATSSTATE, FALSECASTLING, ep) {
+			if b.AnyPiece(nasz, ich, DEFMOATSSTATE, FALSECASTLING, ep, pa) {
 				ret <- (*b)[ich[0]][ich[1]].Fig.FigType
 				break
 			}
@@ -241,7 +230,7 @@ func (b *Board) WeAreThreatened(who Color, pa PlayersAlive, ep EnPassant) <-chan
 	}
 	for _, nasz := range my {
 		for _, ich := range oni {
-			if b.AnyPiece(ich, nasz, DEFMOATSSTATE, FALSECASTLING, ep) {
+			if b.AnyPiece(ich, nasz, DEFMOATSSTATE, FALSECASTLING, ep, pa) {
 				ret <- (*b)[nasz[0]][nasz[1]].Fig.FigType
 				break
 			}
@@ -436,6 +425,7 @@ func (m *Move) After() (*State, error) { //situation after
 //EvalAfter : return the evaluated gamestate afterwards, also error
 func (m *Move) EvalAfter() (state *State, err error) {
 	if state, err = m.After(); err == nil {
+		state.FixMovesNext()
 		state.EvalDeath()
 		state.FixMovesNext()
 	}

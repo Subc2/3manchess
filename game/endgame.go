@@ -7,7 +7,7 @@ func (s *State) CanIMoveWOCheck(who Color) bool {
 	for _, oac := range ALLPOS {
 		if s.Board.GPos(Pos(oac)).Fig.Color == who {
 			for _, oacp := range ALLPOS {
-				m := Move{Pos(oac), Pos(oacp), s, Queen}
+				m := Move{oac, oacp, s, Queen}
 				if _, err := m.After(); err == nil {
 					return true
 				}

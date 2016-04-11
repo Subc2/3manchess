@@ -7,7 +7,7 @@ func (b *Board) canfigstraighthoriz(rank, from, to int8) (bool, bool) { //return
 }
 
 func (b *Board) canfigstraighthorizdirec(r, f, t, d int8) bool { //rank, from file, to file, direction
-	for i := f + d; d*((i-f)%24) < d*((t-f)%24); i = (i + d) % 24 {
+	for i := (f + d + 24) % 24; i != t; i = (i + d + 24) % 24 {
 		if (*b)[r][i].NotEmpty {
 			return false
 		}
@@ -88,7 +88,7 @@ func (b *Board) canfigstraightvertthrucenter(s, f, t int8) bool { //startfile (f
 
 func (b *Board) canfigstraightvertnormal(file, f, t int8) bool {
 	s := sign(t - f)
-	for i := f + s; s*i < t; i += s {
+	for i := f + s; i != t; i += s {
 		if (*b)[i][file].NotEmpty {
 			return false
 		}
@@ -96,116 +96,41 @@ func (b *Board) canfigstraightvertnormal(file, f, t int8) bool {
 	return true
 }
 
-func (b *Board) diagonal(from Pos, to Pos, m MoatsState) bool { //(bool, bool) {
-	nasz := (*b)[from[0]][from[1]] //nasz Square
-	if from == to {
-		return false
-	}
-
-	przel := abs(to[1]-from[1]) % 24
-	vectrank := to[0] - from[0]
-	rankdirec := sign(vectrank)
-	short := abs(vectrank) == przel     //without center
-	long := abs(from[0]+to[0]) == przel //with center
-	cantech := short || long
-
-	var filedirec int8
-	switch to[1] {
-	case (from[1] + przel) % 24:
-		filedirec = +1
-	case (from[1] - przel) % 24:
-		filedirec = -1
-	default:
-		if short && long { //ten warunek był zanegowany od 51d0219 do c984f32 włącznie, odnegowany w 5ff00460b17908610a8365f9e236519759869046
-			panic(from.String() + " " + to.String())
-		}
-	}
-
-	canfigshort, canfiglong, canmoatshort, canmoatlong, capcheckshort, capchecklong := true, true, true, true, true, true
-
-	if from[0] == 0 || to[0] == 0 { //jeżeli jesteśmy na rank 0 i na rank 0 zmierzamy
-		var sprawdzamy, mdir int8
-
-		//if from[0] == 0 { // jeżeli wyjeżdżamy do środka
-		//mdir := filedirec     // short jedzie w kierunku mdir, long jedzie w -mdir
-		//sprawdzamy := from[1] //
-		//} else { // czyli inaczej:  else if to[0]==0  czyli  jeżeli jedziemy na brzeg
-		//mdir := -filedirec
-		//sprawdzamy := to[1]
-		//}
-
-		var dirtemp int8     // jak pojedziesz w tę stronę to wjedziesz w moat'a, jak nie wjedziesz to chyba zero
-		capchecktemp := true // czy wjedziesz w moat'a jak pojedziesz w stronę `dirtemp`, redundantne
-		canmoattemp := true  // czy ten moat jest bridged czy nie
-
-		//switch sprawdzamy { case 0, 23: canmoattemp = m[0];  case 8, 7: m[1];  case 16, 15: m[2] }
-		canmoattemp = m[((sprawdzamy+1)/24)%3]
-		switch sprawdzamy % 8 {
-		case 0: //cross jest jak pojedziemy na minus
-			dirtemp = -1
-			capchecktemp = false
-		case 7: //cross jest jak pojedziemy na plus
-			dirtemp = 1
-			capchecktemp = false
-		}
-		if dirtemp == mdir {
-			capcheckshort = capchecktemp
-			canmoatshort = canmoattemp
-		} else if dirtemp == -mdir {
-			capchecklong = capchecktemp
-			canmoatlong = canmoattemp
-		}
-	}
-	var bijemyostatniego bool
-	if short && canmoatshort {
-		var i int8
-		for i = 1; i < przel; i++ {
-			if (*b)[from[0]+(i*rankdirec)][(((from[1]+(i*filedirec))%24)+24)%24].NotEmpty {
-				canfigshort = false
+func (b *Board) diagonal(from Pos, to Pos, m MoatsState) bool {
+	var moatsOK bool
+	for _, modifyPos := range []Pos{Pos{-1, -1}, Pos{-1, 1}, Pos{1, -1}, Pos{1, 1}} {
+		pos := Pos{from[0]+modifyPos[0], (from[1]+modifyPos[1]+24)%24}
+		for pos[0] >= 0 {
+			moatsOK = true
+			for i := 0; i < 3 && moatsOK; i++ { // checks if we recently crossed not bridged moat
+				ft := FromTo{Pos{pos[0]-modifyPos[0], (pos[1]-modifyPos[1]+24)%24}, pos}
+				switch ft {
+				case FromTo{Pos{0,int8((23 + i*8)%24)},Pos{1,int8((i*8)%24)}}, FromTo{Pos{1,int8((i*8)%24)},Pos{0,int8((23 + i*8)%24)}},
+					FromTo{Pos{1,int8((23 + i*8)%24)},Pos{0,int8((i*8)%24)}},FromTo{Pos{0,int8((i*8)%24)},Pos{1,int8((23 + i*8)%24)}}:
+					if !m[i] {
+						moatsOK = false
+					}
+				}
+			}
+			if !moatsOK {
 				break
 			}
-		}
-		ostatni := (*b)[from[0]+(przel*rankdirec)][(((from[1]+(przel*filedirec))%24)+24)%24]
-		if ostatni.NotEmpty {
-			bijemyostatniego = ostatni.Color() != nasz.Color()
-			if !bijemyostatniego {
-				canfigshort = false
+			if pos[0] > 5 { // we are crossing the center
+				pos[0] = 5
+				modifyPos[0] = -1
+				pos[1] = (pos[1]-modifyPos[1] + modifyPos[1]*10 + 24) % 24
 			}
+			if pos == to {
+				return true
+			}
+			if b[pos[0]][pos[1]].NotEmpty {
+				break
+			}
+			pos[0] = pos[0] + modifyPos[0]
+			pos[1] = (pos[1] + modifyPos[1] + 24) % 24
 		}
 	}
-	if long && canmoatlong {
-		var i int8
-		if canfiglong {
-			for i = 1; i <= (5 - from[0]); i++ {
-				if (*b)[from[0]+i][(((from[1]+(i*filedirec))%24)+24)%24].NotEmpty {
-					canfiglong = false
-					break
-				}
-			}
-		}
-		if canfiglong {
-			for i = 0; i+5-from[0] < przel; i++ {
-				if (*b)[5-i][(((from[1]+((5-from[0]+i)*filedirec))%24)+24)%24].NotEmpty {
-					canfiglong = false
-					break
-				}
-			}
-		}
-		ostatni := (*b)[(((10-from[0]-przel)%6)+6)%6][(((from[1]+(przel*filedirec))%24)+24)%24]
-		if r := recover(); r != nil {
-			panic(from[0] + przel)
-		}
-		if ostatni.NotEmpty {
-			if ostatni.Color() != nasz.Color() {
-				bijemyostatniego = true
-			} else {
-				canfiglong = false
-			}
-		}
-	}
-	canshort := cantech && canfigshort && canmoatshort && (capcheckshort || !bijemyostatniego)
-	canlong := cantech && canfiglong && canmoatlong && (capchecklong || !bijemyostatniego)
-	return canshort || canlong
+	return false
 }
 
 func (b *Board) pawnStraight(from Pos, to Pos, p PawnCenter) bool { //(bool,PawnCenter,EnPassant) {
@@ -248,25 +173,34 @@ func (b *Board) pawnStraight(from Pos, to Pos, p PawnCenter) bool { //(bool,Pawn
 	return cantech && canfig //, pc, ep
 }
 
-func (b *Board) kingStraight(from Pos, to Pos, m MoatsState) bool {
+func (b *Board) kingMove(from Pos, to Pos, m MoatsState) bool {
 	if from == to {
 		return false
 	}
-	nasz := b.GPos(from)
-	tjf := b.GPos(to)
-	switch to {
-	case Pos{from[0] + 1, from[1]},
-		Pos{from[0] - 1, from[1]},
-		Pos{from[0], (from[1] + 1) % 24},
-		Pos{from[0], (from[1] - 1) % 24}:
-		return !(tjf.NotEmpty && tjf.Color() == nasz.Color())
+	if !(b.straight(from, to, m) || b.diagonal(from, to, m)) {
+		return false
 	}
-	return false
+	if (from[0] - to[0] > 1 || from[0] - to[0] < -1) {
+		return false
+	}
+	if !(from[1] - to[1] == 23 || from[1] - to[1] == -23) && // king isn't moving from file 1 to 24 or vice versa AND
+			(from[1] - to[1] > 1 || from[1] - to[1] < -1) {  // isn't moving to adjacent or current file
+		if !(from[0] == 5 && to[0] == 5) { // king isn't moving through the center
+			return false
+		} else { // king is moving through the center
+			if (from[1] + 12) % 24 == to[1] || // king is moving forward through the center OR
+					((from[1] + 10) % 24 == to[1] || (from[1] - 10 + 24) % 24 == to[1]) { // king is moving diagonal through the center
+				return true
+			} else {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (b *Board) pawnCapture(from Pos, to Pos, e EnPassant, p PawnCenter) bool {
 	nasz := b.GPos(from)
-	gdziekolor := Color(from[1]>>3 + 1)
 	cancreek := true
 	if from == to {
 		return false
@@ -280,9 +214,6 @@ func (b *Board) pawnCapture(from Pos, to Pos, e EnPassant, p PawnCenter) bool {
 		}
 		cancreek = !(creektemp && ((to[1]%8 == 0 && from[1]%8 == 7) || (from[1]%8 == 0 && to[1]%8 == 7)))
 		//założenie: creeki są aktywne nawet jak już nie ma moatów
-	}
-	if nasz.Color() == gdziekolor && !p {
-		return false //panic("pC" + nasz.Color().String())
 	}
 	var sgn int8
 	if p {
@@ -308,13 +239,13 @@ func (b *Board) knightMove(from Pos, to Pos, m MoatsState) bool {
 	//analiza wszystkich przypadkow ruchu przez moaty, gdzie wszystkie mozliwosci można wpisać ręcznie
 	cantech := false
 	switch to[1] {
-	case (from[1] + 2) % 24, (from[1] - 2) % 24:
+	case (from[1] + 2) % 24, (from[1] - 2 + 24) % 24:
 		if from[0] == 5 && to[0] == 5 {
 			cantech = true
 		} else if abs(from[0]-to[0]) == 1 {
 			cantech = true
 		}
-	case (from[1] + 1) % 24, (from[1] - 1) % 24:
+	case (from[1] + 1) % 24, (from[1] - 1 + 24) % 24:
 		if from[0] == 5 && to[0] == 4 { // doubtful, awaiting email reply
 			cantech = true
 		} else if abs(from[0]-to[0]) == 2 {
@@ -400,17 +331,17 @@ func (b *Board) knightMove(from Pos, to Pos, m MoatsState) bool {
 	return cantech && canmoat && canfig
 }
 
-func (b *Board) castling(from Pos, to Pos, cs Castling) bool {
+func (b *Board) castling(from Pos, to Pos, cs Castling, pa PlayersAlive) bool {
 	var colorproper bool
 	var col Color
 	switch from {
-	case Pos{4, 0}: //white king starting
+	case Pos{0, 4}: //white king starting
 		col = White
 		colorproper = true
-	case Pos{12, 0}: //gray king starting
+	case Pos{0, 12}: //gray king starting
 		col = Gray
 		colorproper = true
-	case Pos{20, 0}: //black king starting
+	case Pos{0, 20}: //black king starting
 		col = Black
 		colorproper = true
 	}
@@ -425,9 +356,27 @@ func (b *Board) castling(from Pos, to Pos, cs Castling) bool {
 	case from[1] + 2: //cuz king is on the plus
 		kingside = cs.Give(col, 'K')
 	}
-	return (kingside && (*b)[0][from[1]+1].Empty() && (*b)[0][from[1]+2].Empty()) || //kingside and kingside empty
-		(queenside && (*b)[0][to[1]+1].Empty() && (*b)[0][to[1]+2].Empty() && (*b)[0][to[1]+3].Empty())
-	//		quenside and queenside empty
+	if kingside && (*b)[0][from[1]+1].Empty() && (*b)[0][from[1]+2].Empty() { // kingside and kingside empty
+		uncheckedPos := [3]Pos{Pos{from[0], from[0]}, Pos{to[0] + 1, to[1] + 1}, Pos{to[0], to[1]}}
+		for _, checkPos := range uncheckedPos {
+			check := b.ThreatChecking(checkPos, pa, DEFENPASSANT)
+			if check.If == true {
+				kingside = false
+				break
+			}
+		}
+	}
+	if !kingside && queenside && (*b)[0][to[1]+1].Empty() && (*b)[0][to[1]+2].Empty() && (*b)[0][to[1]+3].Empty() { // not kingside, queenside and queenside empty
+		uncheckedPos := [3]Pos{Pos{from[0], from[0]}, Pos{to[0] - 1, to[1] - 1}, Pos{to[0], to[1]}}
+		for _, checkPos := range uncheckedPos {
+			check := b.ThreatChecking(checkPos, pa, DEFENPASSANT)
+			if check.If == true {
+				kingside = false
+				break
+			}
+		}
+	}
+	return kingside || queenside
 }
 
 func (b *Board) rook(from Pos, to Pos, m MoatsState) bool { //whether a rook could move like that
@@ -439,8 +388,8 @@ func (b *Board) knight(from Pos, to Pos, m MoatsState) bool { //whether a knight
 func (b *Board) bishop(from Pos, to Pos, m MoatsState) bool { //whether a boshop could move like that
 	return b.diagonal(from, to, m)
 }
-func (b *Board) king(from Pos, to Pos, m MoatsState, cs Castling) bool { //whether a king could move like that
-	return b.kingStraight(from, to, m) || b.castling(from, to, cs)
+func (b *Board) king(from Pos, to Pos, m MoatsState, cs Castling, pa PlayersAlive) bool { //whether a king could move like that
+	return b.kingMove(from, to, m) || b.castling(from, to, cs, pa)
 }
 func (b *Board) queen(from Pos, to Pos, m MoatsState) bool { //whether a queen could move like that (concurrency, yay!)
 	return b.straight(from, to, m) || b.diagonal(from, to, m)
@@ -461,7 +410,7 @@ func (b *Board) pawn(from Pos, to Pos, e EnPassant) bool { //whether a pawn coul
 }
 
 //AnyPiece : tell whether the piece being in 'from' could move like that
-func (b *Board) AnyPiece(from Pos, to Pos, m MoatsState, cs Castling, e EnPassant) bool {
+func (b *Board) AnyPiece(from Pos, to Pos, m MoatsState, cs Castling, e EnPassant, pa PlayersAlive) bool {
 	if err := from.Correct(); err != nil {
 		panic(err)
 	}
@@ -478,7 +427,7 @@ func (b *Board) AnyPiece(from Pos, to Pos, m MoatsState, cs Castling, e EnPassan
 	case Bishop:
 		return b.bishop(from, to, m)
 	case King:
-		return b.king(from, to, m, cs)
+		return b.king(from, to, m, cs, pa)
 	case Queen:
 		return b.queen(from, to, m)
 	default:

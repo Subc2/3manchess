@@ -101,9 +101,8 @@ func (a *AIPlayer) Worker(chance float64, give chan<- float64, state *game.State
 		return
 	}
 	var wg sync.WaitGroup
-	var oac game.ACFT
 	possib := make(chan *game.State, 2050)
-	for oac.OK() {
+	for _, ft := range game.ALLFROMTO {
 		wg.Add(1)
 		go func(ourft game.FromTo) {
 			sv := ourft.Move(state)
@@ -112,8 +111,7 @@ func (a *AIPlayer) Worker(chance float64, give chan<- float64, state *game.State
 				possib <- v
 			}
 			wg.Done()
-		}(game.FromTo(oac))
-		oac.P()
+		}(ft)
 	}
 	wg.Wait()
 	var newchance float64
@@ -136,13 +134,12 @@ func (a *AIPlayer) Think(s *game.State, hurry <-chan bool) game.Move {
 		<-hurryup
 	}
 	thoughts := make(map[game.FromTo]*float64)
-	var oac game.ACFT
 	countem := new(uint32)
 	atomic.StoreUint32(countem, 0)
 	var wg, gwg sync.WaitGroup
 	var tmx sync.Mutex
 	wg.Add(1)
-	for oac.OK() {
+	for _, ft := range game.ALLFROMTO {
 		go func(ourft game.FromTo) {
 			sv := ourft.Move(s)
 			sv.PawnPromotion = a.Conf.PawnPromotion
@@ -165,8 +162,7 @@ func (a *AIPlayer) Think(s *game.State, hurry <-chan bool) game.Move {
 					gwg.Done()
 				}(ourft)
 			}
-		}(game.FromTo(oac))
-		oac.P()
+		}(ft)
 	}
 	wg.Done()
 	go func() {
