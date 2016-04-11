@@ -39,7 +39,7 @@ var plat1448 []game.FromTo = []game.FromTo{
 func TestHeyItsYourMove_plat1448(t *testing.T) {
 	var a AIPlayer
 	a.Name = "Bot testowy"
-	a.Conf = AIConfig{Depth: DEFFIXDEPTH, OwnedToThreatened: DEFOWN2THRTHD};
+	a.Conf = AIConfig{Depth: 0, OwnedToThreatened: DEFOWN2THRTHD};
 	hurry := make(chan bool)
 	newState := game.NewState()
 	var s *game.State
