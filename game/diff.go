@@ -14,7 +14,7 @@ func (b *Board) Diff(o *Board) []BoardDiff {
 	d := make([]BoardDiff, 0, 5)
 	var p, a *Square
 	var c *BoardDiff
-	for _, oa := range ALLPOS {
+	for oa := range AMFT {
 		if p, a = b.GPos(oa), o.GPos(oa); *a != *p {
 			c = new(BoardDiff)
 			c.Pos = oa

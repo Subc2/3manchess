@@ -123,6 +123,14 @@ func (e EnPassant) Nothing() EnPassant {
 //HalfmoveClock : not used atm, TODO
 type HalfmoveClock uint8
 
+//inc : increase HalfmoveClock
+func (c *HalfmoveClock) inc() HalfmoveClock {
+	if *c != 255 {
+		*c++
+	}
+	return *c
+}
+
 //FullmoveNumber : not used atm, TODO
 type FullmoveNumber uint16
 
@@ -221,13 +229,21 @@ func Byte144(s []byte) [144]byte {
 
 //EvalDeath : evaluate the death of all players
 func (s *State) EvalDeath() {
-	if !(s.CanIMoveWOCheck(s.MovesNext)) { // next player to move cannot be checkmated
-		s.PlayersAlive.Die(s.MovesNext)
-	}
-	for _, c := range COLORS { // all players must have theirs' kings
-		if s.PlayersAlive.Give(c) && !s.Board.IsKingPresent(c) {
-			s.PlayersAlive.Die(c)
+	testCheckmate := true
+	player := s.MovesNext
+	for _ = range COLORS {
+		if !s.PlayersAlive.Give(player) {
+			continue
 		}
+		if testCheckmate && (!s.Board.IsKingPresent(player) || !s.CanIMoveWOCheck(player)) { // next player to move cannot be checkmated
+			s.PlayersAlive.Die(player)
+		} else {
+			if !s.Board.IsKingPresent(player) { // all players must have theirs' kings
+				s.PlayersAlive.Die(player)
+			}
+			testCheckmate = false
+		}
+		player = player.Next()
 	}
 }
 
@@ -261,9 +277,8 @@ var FALSECASTLING = [3][2]bool{
 var NEWGAME State
 
 func init() { //initialize module pseudoconstants
-	allposinit()
-	allfromtoinit()
 	boardinit()
+	amftinit()
 	NEWGAME = State{&BOARDFORNEWGAME, DEFMOATSSTATE, White, DEFCASTLING, DEFENPASSANT, HalfmoveClock(0), FullmoveNumber(1), DEFPLAYERSALIVE}
 }
 

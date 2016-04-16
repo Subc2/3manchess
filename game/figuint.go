@@ -52,7 +52,7 @@ func SqUint8(i uint8) Square {
 //FigUint8 reproduces a Fig from an uint8 repr
 func FigUint8(i uint8) Fig {
 	var f Fig
-	f.PawnCenter = PawnCenter((i >> 7) > 0)
+	f.PawnCenter = PawnCenter((i >> 6) > 0)
 	f.Color = Color((i >> 3) & 7)
 	f.FigType = FigType(i & 7)
 	return f
@@ -62,7 +62,7 @@ func FigUint8(i uint8) Fig {
 func BoardUint(s *([6][24]uint8)) *Board {
 	var b Board
 	var t uint8
-	for _, pos := range ALLPOS {
+	for pos := range AMFT {
 		t = (*s)[pos[0]][pos[1]]
 		b[pos[0]][pos[1]] = SqUint8(t)
 	}
@@ -78,7 +78,7 @@ func BoardByte(s []byte) *Board {
 	if len(s) != 24*6 {
 		panic(len(s))
 	}
-	for _, pos := range ALLPOS {
+	for pos := range AMFT {
 		t = s[byteoac(pos)]
 		b[pos[0]][pos[1]] = SqUint8(t)
 	}
@@ -88,7 +88,7 @@ func BoardByte(s []byte) *Board {
 //Byte returns all 6 concatenated ranks, where each rank is 24 squares, each represented by Square.Uint8
 func (b *Board) Byte() [144]byte {
 	var d [144]byte
-	for _, pos := range ALLPOS {
+	for pos := range AMFT {
 		d[byteoac(pos)] = b.GPos(pos).Uint8()
 	}
 	return d

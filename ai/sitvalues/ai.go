@@ -93,25 +93,27 @@ func (a *AIPlayer) ErrorChannel() chan<- error {
 func (a *AIPlayer) Worker(chance float64, give chan<- float64, state *game.State, whoarewe game.Color) {
 	state.EvalDeath()
 	if !(state.PlayersAlive.Give(whoarewe)) { //if we are dead
-		give <- a.SitValue(state) * chance
+		give <- a.SitValue(state, whoarewe) * chance
 		return
 	}
 	if chance < a.curfixprec { //if we are too deep
-		give <- a.SitValue(state) * chance
+		give <- a.SitValue(state, whoarewe) * chance
 		return
 	}
 	var wg sync.WaitGroup
 	possib := make(chan *game.State, 2050)
-	for _, ft := range game.ALLFROMTO {
-		wg.Add(1)
-		go func(ourft game.FromTo) {
-			sv := ourft.Move(state)
-			sv.PawnPromotion = a.Conf.PawnPromotion
-			if v, err := sv.After(); err == nil {
-				possib <- v
-			}
-			wg.Done()
-		}(ft)
+	for ofrom, loto := range game.AMFT {
+		for _, oto := range loto {
+			wg.Add(1)
+			go func(ourft game.FromTo) {
+				sv := ourft.Move(state)
+				sv.PawnPromotion = a.Conf.PawnPromotion
+				if v, err := sv.After(); err == nil {
+					possib <- v
+				}
+				wg.Done()
+			}(game.FromTo{ofrom, oto})
+		}
 	}
 	wg.Wait()
 	var newchance float64
@@ -139,30 +141,32 @@ func (a *AIPlayer) Think(s *game.State, hurry <-chan bool) game.Move {
 	var wg, gwg sync.WaitGroup
 	var tmx sync.Mutex
 	wg.Add(1)
-	for _, ft := range game.ALLFROMTO {
-		go func(ourft game.FromTo) {
-			sv := ourft.Move(s)
-			sv.PawnPromotion = a.Conf.PawnPromotion
-			if v, err := sv.After(); err == nil {
-				gwg.Add(1)
-				go func(n game.FromTo) {
-					atomic.AddUint32(countem, 1)
-					var newchance float64
-					wg.Wait()
-					newchance = 1.0 / float64(*countem)
-					ourchan := make(chan float64, 100)
-					makefloat := new(float64)
-					tmx.Lock()
-					thoughts[n] = makefloat
-					tmx.Unlock()
-					go func(ch <-chan float64, ou *float64) {
-						*ou += <-ch
-					}(ourchan, makefloat)
-					a.Worker(newchance, ourchan, v, s.MovesNext)
-					gwg.Done()
-				}(ourft)
-			}
-		}(ft)
+	for ofrom, loto := range game.AMFT {
+		for _, oto := range loto {
+			go func(ourft game.FromTo) {
+				sv := ourft.Move(s)
+				sv.PawnPromotion = a.Conf.PawnPromotion
+				if v, err := sv.After(); err == nil {
+					gwg.Add(1)
+					go func(n game.FromTo) {
+						atomic.AddUint32(countem, 1)
+						var newchance float64
+						wg.Wait()
+						newchance = 1.0 / float64(*countem)
+						ourchan := make(chan float64, 100)
+						makefloat := new(float64)
+						tmx.Lock()
+						thoughts[n] = makefloat
+						tmx.Unlock()
+						go func(ch <-chan float64, ou *float64) {
+							*ou += <-ch
+						}(ourchan, makefloat)
+						a.Worker(newchance, ourchan, v, s.MovesNext)
+						gwg.Done()
+					}(ourft)
+				}
+			}(game.FromTo{ofrom, oto})
+		}
 	}
 	wg.Done()
 	go func() {

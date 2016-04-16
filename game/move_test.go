@@ -17,8 +17,8 @@ var plat129 []FromTo = []FromTo{
 	{Pos{2, 0}, Pos{2, 8}},
 	{Pos{0, 9}, Pos{2, 10}},
 	{Pos{0, 16}, Pos{2, 16}},
-	{Pos{2, 8}, Pos{2, 15}},
-/*	{Pos{0, 14}, Pos{2, 13}},
+	{Pos{2, 8}, Pos{2, 15}}, //incorrect afaik, has to return error
+	/*{Pos{0, 14}, Pos{2, 13}},
 	{Pos{2, 16}, Pos{2, 15}},
 	{Pos{0, 1}, Pos{2, 0}},
 	{Pos{0, 11}, Pos{0, 8}},
@@ -31,7 +31,8 @@ var plat129 []FromTo = []FromTo{
 	{Pos{2, 23}, Pos{1, 1}},
 	{Pos{2, 5}, Pos{3, 7}},
 	{Pos{0, 8}, Pos{2, 8}},
-	{Pos{1, 1}, Pos{2, 3}},*/
+	{Pos{1, 1}, Pos{2, 3}},
+	*/
 }
 
 func TestSimpleGenNoPanic(t *testing.T) {
@@ -107,8 +108,8 @@ func TestEvalAfter_plat129(t *testing.T) {
 	var err error
 	var mov Move
 	for _, ft := range plat129 {
-		if s == nil {
-			t.Error("Move considered invalid:", mov)
+		if err != nil {
+			t.Error("Move considered invalid:", err, mov)
 		}
 		mov = ft.Move(s)
 		s, err = mov.EvalAfter()
@@ -117,7 +118,7 @@ func TestEvalAfter_plat129(t *testing.T) {
 		}
 	}
 	if err == nil {
-		t.Error("Invalid move accepted. State afterwards:", s)
+		t.Error("Invalid move accepted:", mov)
 	}
 }
 

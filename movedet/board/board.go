@@ -39,7 +39,7 @@ type Board [6][24]Square
 func FromGameBoard(gb *game.Board) *Board {
 	var newb Board
 	var gsq *game.Square
-	for _, oac := range game.ALLPOS {
+	for oac := range game.AMFT {
 		gsq = gb.GPos(oac)
 		newb[oac[0]][oac[1]] = Square{gsq.NotEmpty, Piece{gsq.FigType, gsq.Color()}}
 	}
@@ -56,7 +56,7 @@ func (b *Board) GPos(p Pos) *Square {
 func (b *Board) Equal(gb *game.Board) bool {
 	var gs *game.Square
 	var os *Square
-	for _, oac := range game.ALLPOS {
+	for oac := range game.AMFT {
 		gs = gb.GPos(oac)
 		os = b.GPos(Pos(oac))
 		if !os.Equal(gs) {

@@ -96,47 +96,50 @@ func (b *Board) canfigstraightvertnormal(file, f, t int8) bool {
 	return true
 }
 
+var PLUSMINUSPAIRS = [4][2]int8{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}}
+
+func (p Pos) AddVector(v [2]int8) Pos {
+	return Pos{p[0] + v[0], (((p[1] + v[0]) % 24) + 24) % 24}
+}
+
+func (p Pos) MinusVector(v [2]int8) Pos {
+	return p.AddVector([2]int8{-v[0], -v[1]})
+}
+
 func (b *Board) diagonal(from Pos, to Pos, m MoatsState) bool {
-	var moatsOK bool
-	for _, modifyPos := range []Pos{Pos{-1, -1}, Pos{-1, 1}, Pos{1, -1}, Pos{1, 1}} {
-		pos := Pos{from[0]+modifyPos[0], (from[1]+modifyPos[1]+24)%24}
-		for pos[0] >= 0 {
-			moatsOK = true
-			for i := 0; i < 3 && moatsOK; i++ { // checks if we recently crossed not bridged moat
-				ft := FromTo{Pos{pos[0]-modifyPos[0], (pos[1]-modifyPos[1]+24)%24}, pos}
-				switch ft {
-				case FromTo{Pos{0,int8((23 + i*8)%24)},Pos{1,int8((i*8)%24)}}, FromTo{Pos{1,int8((i*8)%24)},Pos{0,int8((23 + i*8)%24)}},
-					FromTo{Pos{1,int8((23 + i*8)%24)},Pos{0,int8((i*8)%24)}},FromTo{Pos{0,int8((i*8)%24)},Pos{1,int8((23 + i*8)%24)}}:
-					if !m[i] {
-						moatsOK = false
-					}
+	for _, modifyPos := range PLUSMINUSPAIRS {
+		for pos := from.AddVector(modifyPos); pos[0] >= 0; pos = pos.AddVector(modifyPos) {
+			if max(from[0], to[0]) == 1 && abs(from[1]%8-to[1]%8) == 7 {
+				// we crossed a moat (moving diagonally)
+				var i int8 // moat index
+				if from[1]%8 == 7 {
+					i = from[1] / 8
+				} else {
+					i = to[1] / 8
+				}
+				if !m[i] {
+					break
 				}
 			}
-			if !moatsOK {
-				break
-			}
 			if pos[0] > 5 { // we are crossing the center
-				pos[0] = 5
 				modifyPos[0] = -1
-				pos[1] = (pos[1]-modifyPos[1] + modifyPos[1]*10 + 24) % 24
+				pos = Pos{
+					5,
+					(pos[1] + (-1+10)*modifyPos[1] + 24) % 24,
+				}
 			}
 			if pos == to {
 				return true
 			}
-			if b[pos[0]][pos[1]].NotEmpty {
+			if b.GPos(pos).NotEmpty {
 				break
 			}
-			pos[0] = pos[0] + modifyPos[0]
-			pos[1] = (pos[1] + modifyPos[1] + 24) % 24
 		}
 	}
 	return false
 }
 
 func (b *Board) pawnStraight(from Pos, to Pos, p PawnCenter) bool { //(bool,PawnCenter,EnPassant) {
-	var cantech, canfig bool
-	//pc := p
-	//ep := e
 	if from == to {
 		//panic("Same square!")
 		return false
@@ -153,50 +156,26 @@ func (b *Board) pawnStraight(from Pos, to Pos, p PawnCenter) bool { //(bool,Pawn
 		sgn = 1
 	}
 	if from[1] == to[1] {
-		realsgn := sign(to[0] - from[0])
-		if realsgn != sgn {
+		if sign(to[0]-from[0]) != sgn {
 			return false //,p,e
 		}
 		if !bool(p) && from[0] == 1 && to[0] == 3 {
-			cantech = true
-			canfig = (*b)[2][from[1]].Empty() && b.GPos(to).Empty()
+			return (*b)[2][from[1]].Empty() && b.GPos(to).Empty()
 			//ep:=e.Appeared(Pos{2,from[1]})
 		} else if to[0] == from[0]+sgn {
-			cantech = true
-			canfig = b.GPos(to).Empty()
+			return b.GPos(to).Empty()
 		}
-	} else if ((from[1]+12)%24) == to[1] && from[0] == 5 && to[0] == 5 && !bool(p) {
-		cantech = true
-		canfig = b.GPos(to).Empty()
-		//pc = true
 	}
-	return cantech && canfig //, pc, ep
+	return ((from[1]+12)%24) == to[1] && from[0] == 5 && to[0] == 5 && !bool(p) && b.GPos(to).Empty()
 }
 
 func (b *Board) kingMove(from Pos, to Pos, m MoatsState) bool {
-	if from == to {
-		return false
-	}
-	if !(b.straight(from, to, m) || b.diagonal(from, to, m)) {
-		return false
-	}
-	if (from[0] - to[0] > 1 || from[0] - to[0] < -1) {
-		return false
-	}
-	if !(from[1] - to[1] == 23 || from[1] - to[1] == -23) && // king isn't moving from file 1 to 24 or vice versa AND
-			(from[1] - to[1] > 1 || from[1] - to[1] < -1) {  // isn't moving to adjacent or current file
-		if !(from[0] == 5 && to[0] == 5) { // king isn't moving through the center
-			return false
-		} else { // king is moving through the center
-			if (from[1] + 12) % 24 == to[1] || // king is moving forward through the center OR
-					((from[1] + 10) % 24 == to[1] || (from[1] - 10 + 24) % 24 == to[1]) { // king is moving diagonal through the center
-				return true
-			} else {
-				return false
-			}
-		}
-	}
-	return true
+	return from != to && b.queen(from, to, m) && absu(from[0]-to[0]) <= 1 &&
+		((absu(from[1]-to[1]) == 23 || absu(from[1]-to[1]) <= 1) ||
+			// king isn't moving to adjacent or current file (such as from file 1 to 24 or vice versa)
+			(from[0] == 5 && to[0] == 5 && // king is moving through the center
+				((from[1]+12)%24 == to[1] || // king movin fwd thru center
+					((from[1]+10)%24 == to[1] || (from[1]-10+24)%24 == to[1])))) // king movin diag thru center
 }
 
 func (b *Board) pawnCapture(from Pos, to Pos, e EnPassant, p PawnCenter) bool {
@@ -221,114 +200,70 @@ func (b *Board) pawnCapture(from Pos, to Pos, e EnPassant, p PawnCenter) bool {
 	} else {
 		sgn = int8(1)
 	}
+	var ep Pos
+	if e[0] == to {
+		ep = e[0]
+	} else {
+		ep = e[1]
+	}
 	return ((from[0] == 5 && to[0] == 5 && !bool(p)) && //jest na 5 ranku i nie przeszedl przez srodek jeszcze
 		(to[1] == ((from[1]+24-10)%24) || to[1] == ((from[1]+10)%24)) && //poprawnie przelecial na skos przez srodek
-		b.GPos(to).Color() != nasz.Color()) || //ten co go bijemy jest innego koloru ALBO
-		((e[0] == to || e[1] == to) && //pozycja tego co go bijemy jest w enpassant
-			(*b)[3][to[1]].What() == Pawn && //ten co go bijemy jest pionkiem
-			(*b)[3][to[1]].Color() != nasz.Color() && //i jest innego koloru
-			(*b)[2][to[1]].Empty()) || //a pole za nim jest puste (jak to po ruchu pre-enpassant) ALBO
+		b.GPos(to).NotEmpty && b.GPos(to).Fig.Color != nasz.Fig.Color) || //ten co go bijemy jest innego koloru ALBO
 		(to[0] == from[0]+sgn && cancreek && //zwykle bicie, o jeden w kierunku sgn na ranku
-			((to[1] == (from[1]+1)%24) || (to[1] == (from[1]+24-1)%24)) && //i o jeden w tę lub tamtą stronę (wsio mod24) na file'u
-			b.GPos(to).Color() != nasz.Color()) //a ten co go bijemy jest innego koloru
+			((to[1] == (from[1]+1)%24) || (to[1] == (from[1]+24-1)%24)) && //o jeden w tę lub tamtą stronę (wsio mod24) na file'u
+			(((e[0] == to || e[1] == to) && //pozycja tego co go bijemy jest w enpassant
+				(*b)[3][ep[1]].Fig.FigType == Pawn && //ten co go bijemy jest pionkiem
+				(*b)[3][ep[1]].NotEmpty && (*b)[3][ep[1]].Fig.Color != nasz.Fig.Color && //i jest innego koloru
+				(*b)[2][ep[1]].Empty()) || //a pole za nim jest puste (jak to po ruchu pre-enpassant) ALBO
+				(b.GPos(to).NotEmpty && b.GPos(to).Fig.Color != nasz.Fig.Color))) //ten co go bijemy jest innego koloru
+}
+
+func xoreq(n1, n2, w int8) bool {
+	switch n1 {
+	case 0:
+		return n2 == w
+	case w:
+		return n2 == 0
+	}
+	return false
+}
+
+var xrqnmv = map[int8]map[int8]int8{
+	6: {0: 1},
+	7: {1: 1, 0: 2},
+	0: {6: 1, 7: 2},
+	1: {7: 1},
 }
 
 func (b *Board) knightMove(from Pos, to Pos, m MoatsState) bool {
-	nasz := (*b)[from[0]][from[1]]
 	//gdziekolor := ColorUint8(uint8(from[1]>>3))
 	//analiza wszystkich przypadkow ruchu przez moaty, gdzie wszystkie mozliwosci można wpisać ręcznie
-	cantech := false
+	var can bool
 	switch to[1] {
 	case (from[1] + 2) % 24, (from[1] - 2 + 24) % 24:
-		if from[0] == 5 && to[0] == 5 {
-			cantech = true
-		} else if abs(from[0]-to[0]) == 1 {
-			cantech = true
-		}
+		can = from[0] == 5 && to[0] == 5 || abs(from[0]-to[0]) == 1
 	case (from[1] + 1) % 24, (from[1] - 1 + 24) % 24:
-		if from[0] == 5 && to[0] == 4 { // doubtful, awaiting email reply
-			cantech = true
-		} else if abs(from[0]-to[0]) == 2 {
-			cantech = true
-		}
+		can = from[0] == 5 && to[0] == 4 || abs(from[0]-to[0]) == 2
 	}
-	canmoat := true
-	//cancheck := true
-	if cantech && from[0] < 3 && to[0] < 3 {
-		var ourmoat bool
+	if !can {
+		return false
+	}
+	can = from[0] >= 3 && to[0] >= 3
+	if !can {
 		switch from[1] {
 		case 22, 23, 0, 1:
-			ourmoat = m[0]
+			can = m[0]
 		case 6, 7, 8, 9:
-			ourmoat = m[1]
+			can = m[1]
 		case 14, 15, 16, 17:
-			ourmoat = m[2]
+			can = m[2]
 		}
-		switch from[1] % 8 {
-		case 6:
-			if to[1]%8 == 0 {
-				if from[0]+to[0] == 1 {
-					canmoat = ourmoat
-				}
-			}
-		case 7:
-			if to[1]%8 == 1 {
-				if from[0]+to[0] == 1 {
-					canmoat = ourmoat
-				}
-			} else if to[1]%8 == 0 {
-				switch from[0] {
-				case 0:
-					if to[0] == 2 { //cancheck = false
-						canmoat = ourmoat
-					}
-				case 2:
-					if to[0] == 0 { //cancheck = false
-						canmoat = ourmoat
-					}
-				}
-			}
-		case 0:
-			if to[1]%8 == 6 {
-				if from[0]+to[0] == 1 {
-					canmoat = ourmoat
-				}
-			} else if to[1]%8 == 7 {
-				switch from[0] {
-				case 0:
-					if to[0] == 2 { //cancheck = false
-						canmoat = ourmoat
-					}
-				case 2:
-					if to[0] == 0 { //cancheck = false
-						canmoat = ourmoat
-					}
-				}
-			}
-		case 1:
-			if to[1]%8 == 7 {
-				switch from[0] {
-				case 0:
-					if to[0] == 1 { //cancheck = false
-						canmoat = ourmoat
-					}
-				case 1:
-					if to[0] == 0 { //cancheck = false
-						canmoat = ourmoat
-					}
-				}
-			}
+		if !can && xoreq(from[0], to[0], xrqnmv[from[1]%8][to[1]%8]) {
+			return false
 		}
 	}
-	canfig := true
-	if cantech && canmoat {
-		if (*b)[to[0]][to[1]].NotEmpty {
-			if (*b)[to[0]][to[1]].Color() == nasz.Color() {
-				canfig = false
-			}
-		}
-	}
-	return cantech && canmoat && canfig
+	dosq := b.GPos(to)
+	return dosq.Empty() || dosq.Color() != b.GPos(from).Color()
 }
 
 func (b *Board) castling(from Pos, to Pos, cs Castling, pa PlayersAlive) bool {
@@ -357,7 +292,7 @@ func (b *Board) castling(from Pos, to Pos, cs Castling, pa PlayersAlive) bool {
 		kingside = cs.Give(col, 'K')
 	}
 	if kingside && (*b)[0][from[1]+1].Empty() && (*b)[0][from[1]+2].Empty() { // kingside and kingside empty
-		uncheckedPos := [3]Pos{Pos{from[0], from[0]}, Pos{to[0] + 1, to[1] + 1}, Pos{to[0], to[1]}}
+		uncheckedPos := [3]Pos{{from[0], from[0]}, {to[0] + 1, to[1] + 1}, {to[0], to[1]}}
 		for _, checkPos := range uncheckedPos {
 			check := b.ThreatChecking(checkPos, pa, DEFENPASSANT)
 			if check.If == true {
@@ -367,7 +302,7 @@ func (b *Board) castling(from Pos, to Pos, cs Castling, pa PlayersAlive) bool {
 		}
 	}
 	if !kingside && queenside && (*b)[0][to[1]+1].Empty() && (*b)[0][to[1]+2].Empty() && (*b)[0][to[1]+3].Empty() { // not kingside, queenside and queenside empty
-		uncheckedPos := [3]Pos{Pos{from[0], from[0]}, Pos{to[0] - 1, to[1] - 1}, Pos{to[0], to[1]}}
+		uncheckedPos := [3]Pos{{from[0], from[0]}, {to[0] - 1, to[1] - 1}, {to[0], to[1]}}
 		for _, checkPos := range uncheckedPos {
 			check := b.ThreatChecking(checkPos, pa, DEFENPASSANT)
 			if check.If == true {

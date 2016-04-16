@@ -42,7 +42,7 @@ func WhatMove(bef *game.State, aft *board.Board) (*game.Move, *game.State, error
 	appeared := make([]changefromempty, 0, 2)
 	disappeared := make([]changetoempty, 0, 2)
 	replaced := make([]changereplace, 0, 1)
-	for _, oac := range game.ALLPOS {
+	for oac := range game.AMFT {
 		prev := bef.Board.GPos(game.Pos(oac))
 		next := aft.GPos(board.Pos(oac))
 		if prev.Empty() && next.NotEmpty {

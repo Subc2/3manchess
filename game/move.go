@@ -126,13 +126,8 @@ func (m *Move) IsItPawnRunningEnPassant() bool {
 
 //IsItPawnCapturingEnPassant or not?
 func (m *Move) IsItPawnCapturingEnPassant() bool {
-	if !(m.What().FigType == Pawn) {
-		return false
-	}
-	if m.From[0] == 3 && m.To[0] == 2 && (*(m.Before.Board))[3][m.To[1]].What() == Pawn {
-		return true
-	}
-	return false
+	return bool(m.What().PawnCenter) && m.What().FigType == Pawn && m.From[0] == 3 && m.To[0] == 2 &&
+		m.From[1] != m.To[1] && m.Before.Board.GPos(m.To).Empty()
 }
 
 //IllegalMoveError : error on illegal move
@@ -148,7 +143,7 @@ func (e IllegalMoveError) Error() string {
 
 //WhereIsKing : where is king of specified color on the board?
 func (b *Board) WhereIsKing(who Color) *Pos {
-	for _, opos := range ALLPOS {
+	for opos := range AMFT {
 		if sq := b.GPos(opos); sq.NotEmpty && sq.Fig.Color == who && sq.Fig.FigType == King {
 			return &opos
 		}
@@ -177,7 +172,7 @@ func (b *Board) CheckChecking(who Color, pa PlayersAlive) Check { //true if in c
 func (b *Board) ThreatChecking(where Pos, pa PlayersAlive, ep EnPassant) Check {
 	who := b.GPos(where).Color()
 	var heyitscheck Check
-	for _, opos := range ALLPOS {
+	for opos := range AMFT {
 		if tjf := b.GPos(opos); tjf.NotEmpty && tjf.Color() != who && pa.Give(tjf.Color()) &&
 			b.AnyPiece(opos, where, DEFMOATSSTATE, FALSECASTLING, ep, pa) {
 			return Check{If: true, From: opos}
@@ -191,7 +186,7 @@ func (b *Board) FriendsNAllies(who Color, pa PlayersAlive) ([]Pos, <-chan Pos) {
 	my := make([]Pos, 0, 16)
 	oni := make(chan Pos, 32)
 	if pa.Give(who) {
-		for _, opos := range ALLPOS {
+		for opos := range AMFT {
 			tjf := b.GPos(opos)
 			if tjf.Color() == who {
 				my = append(my, opos)
@@ -282,7 +277,7 @@ func (m *Move) After() (*State, error) { //situation after
 		next.Board[0][m.From[1]] = empty                        //emptying king's square
 		next.Board[0][m.From[1]+3] = empty                      //emptying rook's square
 		next.Castling = next.Castling.OffKing(m.What().Color)
-		next.HalfmoveClock++
+		next.HalfmoveClock.inc()
 		next.FullmoveNumber++
 		next.EnPassant = next.EnPassant.Nothing()
 	} else if m.IsItQueenSideCastling() {
@@ -292,7 +287,7 @@ func (m *Move) After() (*State, error) { //situation after
 		next.Board[0][m.From[1]] = empty                        //emptying the king's square
 		next.Board[0][m.From[1]+4] = empty                      //emptying the rook's square
 		next.Castling = next.Castling.OffKing(m.What().Color)
-		next.HalfmoveClock++
+		next.HalfmoveClock.inc()
 		next.FullmoveNumber++
 		next.EnPassant = next.EnPassant.Nothing()
 	} else if m.IsItPawnRunningEnPassant() {
@@ -322,14 +317,14 @@ func (m *Move) After() (*State, error) { //situation after
 			}
 		}
 		if czyempty { //if the target square is empty
-			next.HalfmoveClock++
+			next.HalfmoveClock.inc()
 		} else {
 			next.HalfmoveClock = HalfmoveClock(0) //capturing sth
 		}
 		next.FullmoveNumber++
 		next.EnPassant = next.EnPassant.Nothing()
 		moatbridging := true
-		if !next.MoatsState[m.From[1]/8] || !next.MoatsState[m.From[1]/8+1] {
+		if !next.MoatsState[m.From[1]/8] || !next.MoatsState[(m.From[1]/8+1)%3] {
 			for i := (m.From[1] / 8) * 8; i < ((m.From[1]/8)*8)+8; i++ { //check if all of the color's rank0 is empty
 				if next.Board[0][i].NotEmpty { //if one of the squares is not empty
 					moatbridging = false //then it is false
@@ -338,8 +333,8 @@ func (m *Move) After() (*State, error) { //situation after
 			}
 		}
 		if moatbridging { //if all of the color's rank0 is empty
-			next.MoatsState[m.From[1]/8] = true   //bridge queenside
-			next.MoatsState[m.From[1]/8+1] = true //bridge kingside
+			next.MoatsState[m.From[1]/8] = true       //bridge queenside
+			next.MoatsState[(m.From[1]/8+1)%3] = true //bridge kingside
 		}
 	} else if m.What().FigType == King {
 		var empty Square
@@ -348,7 +343,7 @@ func (m *Move) After() (*State, error) { //situation after
 		next.Board[m.From[0]][m.From[1]] = empty
 		next.Castling = next.Castling.OffKing(m.Before.MovesNext)
 		if czyempty {
-			next.HalfmoveClock++
+			next.HalfmoveClock.inc()
 		} else {
 			next.HalfmoveClock = HalfmoveClock(0)
 		}
@@ -362,7 +357,7 @@ func (m *Move) After() (*State, error) { //situation after
 		}
 		if moatbridging {
 			next.MoatsState[m.From[1]/8] = true
-			next.MoatsState[m.From[1]/8+1] = true
+			next.MoatsState[(m.From[1]/8+1)%3] = true
 		}
 	} else if m.What().FigType == Pawn {
 		var empty Square
@@ -380,7 +375,7 @@ func (m *Move) After() (*State, error) { //situation after
 		}
 		if moatbridging {
 			next.MoatsState[m.From[1]/8] = true
-			next.MoatsState[m.From[1]/8+1] = true
+			next.MoatsState[(m.From[1]/8+1)%3] = true
 		}
 		if m.To[0] == 0 && m.From[0] == 1 {
 			next.Board[m.To[0]][m.To[1]] = Square{NotEmpty: true, Fig: Fig{FigType: m.PawnPromotion, Color: m.What().Color, PawnCenter: false}}
@@ -390,6 +385,8 @@ func (m *Move) After() (*State, error) { //situation after
 			case King:
 				return &next, IllegalMoveError{m, "KingPromotion", "Promotion to King"}
 			} //let's say that you can promote a pawn to a pawn
+		} else if m.From[0] == m.To[0] {
+			next.Board[m.To[0]][m.To[1]].Fig.PawnCenter = true
 		}
 	} else {
 		var empty Square
@@ -397,7 +394,7 @@ func (m *Move) After() (*State, error) { //situation after
 		next.Board[m.To[0]][m.To[1]] = next.Board[m.From[0]][m.From[1]]
 		next.Board[m.From[0]][m.From[1]] = empty
 		if czyempty {
-			next.HalfmoveClock++
+			next.HalfmoveClock.inc()
 		} else {
 			next.HalfmoveClock = HalfmoveClock(0)
 		}
@@ -411,7 +408,7 @@ func (m *Move) After() (*State, error) { //situation after
 		}
 		if moatbridging {
 			next.MoatsState[m.From[1]/8] = true
-			next.MoatsState[m.From[1]/8+1] = true
+			next.MoatsState[(m.From[1]/8+1)%3] = true
 		}
 	}
 
@@ -425,7 +422,6 @@ func (m *Move) After() (*State, error) { //situation after
 //EvalAfter : return the evaluated gamestate afterwards, also error
 func (m *Move) EvalAfter() (state *State, err error) {
 	if state, err = m.After(); err == nil {
-		state.FixMovesNext()
 		state.EvalDeath()
 		state.FixMovesNext()
 	}
